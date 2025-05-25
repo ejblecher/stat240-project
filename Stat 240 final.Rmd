@@ -1,0 +1,243 @@
+---
+title: "Stat 240 Final Analysis: Comparing Average COVID-19 Death Rates by Mask Usage in U.S. Counties"
+output: html_document
+date: "2025-05-01"
+---
+
+## Group Members
+> Samira Ali,
+> Evan Belcher,
+> Moyraa Ali,
+> Xinyi Lyu
+
+
+## Introduction 
+> Covid-19 impacted millions of lives across the world, whether it was school cancellations, social distancing, or getting sick, everyone felt it. There was so much misinformation surrounding the infectious disease, that it was hard to tell what was preventing spread, or what was only a cautionary measure. It is valid to ask what the overall result of these measures was, did they reduce the number of deaths related to Covid-19? This is a line of questioning we decided to explore. Our main question is about the widely contested mask mandate. Is there a difference in the Covid-19 death rate based on mask usage? With this question, we explored mask usage in U.S counties in 2020. We broke people up into two groups, those who were high masking and those who were low masking, and explored how their mask usage affected the Covid-19 death rate. We ultimately found that there is a significant difference in death rates based on mask usage, however not in the direction we originally hypothesized, surprisingly the high masking group has a slightly higher mean death rate than the low masking group, so the result was statistically significant in the opposite direction."
+
+
+# Background 
+
+## Data Sources
+> The raw data comes from the New York Times investigative journalism into Covid-19 primarily during the years 2020 and 2021, they have since stopped collecting Covid-19 data. We used two data sets from this source, survey data on masking, and Covid-19 cases, as well as deaths. The survey data for masking comes from 2020, so that year will be the main focus for our analysis, and both datasets we used are broken up at the county level. 
+
+> The raw data can be found here sourced from the New York Times: 
+
+> [County death: covid-19-data/us-counties-2020.csv at master · nytimes/covid-19-data · GitHub](https://github.com/nytimes/covid-19-data/blob/master/us-counties-2020.csv)
+
+> [County mask rates: covid-19-data/mask-use/mask-use-by-county.csv at master · nytimes/covid-19-data · GitHub](https://github.com/nytimes/covid-19-data/blob/master/mask-use/mask-use-by-county.csv)
+
+
+
+## Data Structure
+> A single row in the mask survey data represents the answer a person gave (never, rarely, sometimes, frequently, always) on their masking habits, as well as the county the answer was given from. 
+
+> A single row in the Covid-19 U.S county data, represents the county and state where Covid-19 cases and deaths occured during a single day. 
+
+> The sample size was approximately 3,100 counties, with about 1,550 counties in each mask usage group.
+
+## Data Variables
+
+> **County Code:** This represents the unique code a given county has for identification purposes, it is in both datasets.
+
+> **Year:** The year represented in the datasets is 2020, so the year for our analysis will always be 2020.
+
+> **Death Rate:** We have defined the death rate here as the total deaths/total cases.
+
+> **Low Masking:** This is the group of people from the survey data who answered that they never mask
+
+> **High Masking:** This is the group of people from the survey data who answered that they always mask
+
+## Data Cleaning/Processing
+> The data was cleaned up to make sure that any irrelevant variables or mismatched data values did not affect our analysis. Specifically for the masking survey data the answers that fell more into the median were taken out of the data, only leaving those who answered either that they masked "always" or "never." The other dataset that contains the cases and deaths by county also had data that came from unknown counties which was taken out.  
+
+## Relevant Data Visualization
+
+> Plotted below are two visualizations that shows the average mean between the death rates for our two groups, high masking and low masking. It is evident that there is a difference in death rates between the two groups, as those who are a part of the high masking group have a higher average death rate. The bar graph shows the high mask group's bar as higher, and that is echoed in the box plot. The box plot however does indicate that there were a few counties in the low mask group that had an extremely high death rate compared to the high masking group, those we are considering outliers in our data. Even then, the median death rate for the low masking group still seems to be lower than the high masking group. The red dot on the box plot is to highlight the means of the two groups.  
+
+
+
+```{r chart, include=FALSE, warning=FALSE, message=FALSE}
+mask_data = read.csv("mask-use-by-county.csv")
+
+county_data = read.csv("us-counties-2020.csv")
+
+library(dplyr)
+county_death_totals <- county_data %>%
+  rename(countycode = fips) %>%
+  group_by(county, state, countycode) %>%
+  summarise(
+    total_cases = max(cases),
+    total_deaths = max(deaths),
+    .groups = "drop"
+  )
+
+Filt_mask_data <- mask_data %>%
+  rename(countycode = COUNTYFP) %>%
+  select(countycode, NEVER, ALWAYS)
+
+main_merged <- county_death_totals %>%
+  inner_join(Filt_mask_data, by = c("countycode"))
+
+main_merged <- main_merged %>%
+  mutate(mask_group = case_when(
+    ALWAYS >= 0.5 ~ "High",
+    NEVER <= 0.5 ~ "Low",
+    TRUE ~ NA_character_
+  )) %>%
+  filter(!is.na(mask_group))
+```
+
+```{r death-rate-plot, warning=FALSE, echo=FALSE}
+library(ggplot2)
+ggplot(main_merged, aes(x = mask_group, y = total_deaths / total_cases)) +
+  geom_bar(stat = "summary", fun = "mean", fill = "purple") +
+  labs(
+    x = "Mask Usage Group",
+    y = "Mean Death Rate (Deaths / Cases)",
+    title = "Average COVID-19 Death Rate by Mask Usage Group"
+  ) +
+  theme_bw()
+
+```
+
+```{r death-rate-boxplot, warning=FALSE, echo=FALSE}
+ggplot(main_merged, aes(x = mask_group, y = total_deaths / total_cases)) +
+  geom_boxplot(fill = "purple", alpha = 0.6) +
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 3, color = "red") +
+  labs(
+    x = "Mask Usage Group",
+    y = "Death Rate (Deaths / Cases)",
+    title = "COVID-19 Death Rate Distribution by Mask Usage Group"
+  ) +
+  theme_bw()
+
+```
+
+
+
+
+# Statistical Analysis
+
+## Parameters:
+> Let the parameters of interest be:
+
+> μ<sub>H</sub>: The true mean COVID-19 death rate in counties with high mask usage (ALWAYS ≥ 0.5).
+
+> μ<sub>L</sub>: The true mean COVID-19 death rate in counties with low mask usage (NEVER ≥ 0.5).
+
+## Type of Interest:
+> We perform a two-sample t-test for independent samples with unequal variances (Welch’s t-test) to test whether the average death rate is lower in high-mask-usage counties.
+
+
+## Hypotheses:
+> H0: μH = μL (there’s no difference in average death rates)
+
+> Ha: μH < μL​ (high mask usage implies a lower average death rate)
+
+## Assumptions:
+> We define the distributions as:
+
+> H = Death Rate in High Mask Usage Counties ∼ 𝐷H​(μH​, σH) 
+
+>𝐿 = Death Rate in Low Mask Usage Counties ∼ 𝐷L( μL, 𝜎L)
+
+> Independence: We assume the death rates across counties are independent of one another.
+
+
+## Normality: 
+> Welch’s t-test is robust to non-normality when sample sizes are moderate or large, which is the case here.
+
+> The Welch’s t-test is calculated as: 
+
+$$
+df = \frac{\left( \frac{s_x^2}{n_x} + \frac{s_y^2}{n_y} \right)^2}
+{\frac{\left( \frac{s_x^2}{n_x} \right)^2}{n_x - 1} + \frac{\left( \frac{s_y^2}{n_y} \right)^2}{n_y - 1}}
+$$
+
+
+
+
+## Results:
+> After calculating the test statistic (T) and its corresponding p-value, we compare that p-value to our chosen significance level α = 0.05.
+
+> The test statistic is calculated as:
+
+$$
+t = \frac{\bar{x} - \bar{y}}{\sqrt{\frac{s_x^2}{n_x} + \frac{s_y^2}{n_y}}}
+$$
+
+
+
+## Interpretation: Compare p-value with α = 0.05
+
+> If p < 0.05, we reject H0​ and conclude that high-mask counties have significantly lower death rates.
+
+> If p ≥ 0.05, we do not have sufficient evidence to support the claim that high-mask counties had lower death rates.
+
+
+## Test Statistic & Null Distribution
+> Let $\bar{x}$ be the sample mean death rate in high mask counties, and $\bar{y}$ be the sample mean death rate in low mask counties. Let $s_x^2$ and $s_y^2$ be the sample variances of the two groups, and $n_x$, $n_y$ their sample sizes.
+
+```{r t-test}
+main_merged <- main_merged %>%
+  mutate(death_rate = total_deaths / total_cases)
+
+high_group <- main_merged %>% filter(mask_group == "High") %>% pull(death_rate)
+low_group  <- main_merged %>% filter(mask_group == "Low") %>% pull(death_rate)
+
+t_test_covid <- t.test(high_group, low_group, alternative = "less")
+t_test_covid
+
+```
+
+
+
+> $\bar{x} = 0.01869$ is the sample mean death rate in high mask counties
+> $\bar{y} = 0.01634$ is the sample mean death rate in low mask counties
+> $s_x^2$ and $s_y^2$ are the sample variances of the death rates in the high and low mask groups 
+> $n_x \approx 1550$ and $n_y \approx 1550$ are the sample sizes of each group
+
+> Test Statistic = 5.8582
+
+> Degrees of Freedom (df) = 3098.7
+
+> P-value = 1
+
+> This result show strong evidence that **we failed to reject the null hypothesis.** There is not enough evidence to show that high mask wearing groups have a lower death rate. In fact, the data suggests that there is a significant difference in average Covid-19 death rates between high and low mask usage counties, but the high mask wearing group actually has a **higher** mean death rate, despite being expected to show lower death rate. A p-value of 1, while rare, shows that it is so significant it is **strongly** contridicting our alternative hypothesis.  
+
+
+# Discussion 
+
+## Data Interpretation: 
+> A **p-value** is essentially a number that tells you how likely it is that your data happened by chance, assuming the null hypothesis is true. Which means a lower p-value indicates a higher probability of the data being statistically significant. 
+> If the results of our analysis is a p-value of **less than 0.05**, we conclude that there is statistically significant evidence to suggest that the mean death rates differ between the two groups (high mask wearing vs. low mask wearing counties). 
+> If the results of our analysis is a **p-value of greater than or equal to** 0.05, we determine that there is not enough evidence to support a relationship between high mask wearing and lower Covid-19 deaths.
+> A **confidence interval** is a range of values that's likely to contain the true value of a population parameter, with a certain level of confidence.
+
+> We are 95% confident that the true difference in mean death rates is no greater than 0.003007795 in high mask usage counties compared to low mask usage counties. This interval ranges from negative infinity up to that value. 
+
+
+> Failing to reject null hypothesis here means that even though we saw a difference in the death rates between the groups, it is in the opposite direction of what we expected. We concluded that in this sample higher mask wearing groups have a higher mean death rate, not a lower one. This does not mean that wearing a mask means that you are more likley to catch Covid-19 or die a Covid-19 related death. It simply means that this relationship could be due to various different confounding factors, which we have listed below.
+
+
+## Data shortcomings/Limits:
+> The sample data we used does not account for many socioeconomic and geographical factors when it comes to the spread of illness. There is no sorting of the data based on:
+
+> **Population density** 
+
+> **The average age of a certain county**
+
+> **Vaccination rates** 
+
+> **Access to health care in certain areas, either geographically or financially**
+
+> In cleaning up the data sets to conduct our analysis, we also removed populations that only wore their masks most times or rarely, and used only the extremes, always or never. Another variable to consider within the data is the biases that people may have about their own masking habits or masking in general.
+
+
+## Data Questions: 
+> The biggest question we worked through was how to set up the p-test in a way that would give us meaningful information based on the data. There is always room for improvement, and in the future we would like to account for some of the factors mentioned in the limitations, especially to include the median responses on mask use frequency and information on vaccination rates in conjunction. If we were to redo this analysis with the same data, perhaps considering those factors like population, socioeconomic, and etc. we may be able to better understand the overall impact Covid-19 precautions had on the death rate. This information could be valuable in helping to improve future pandemic responses.  
+
+## References
+> nytimes. (2020a). covid-19-data/mask-use/mask-use-by-county.csv at master · nytimes/covid-19-data. GitHub. https://github.com/nytimes/covid-19-data/blob/master/mask-use/mask-use-by-county.csv
+
+> nytimes. (2020b). covid-19-data/us-counties-2020.csv at master · nytimes/covid-19-data. GitHub. https://github.com/nytimes/covid-19-data/blob/master/us-counties-2020.csv
